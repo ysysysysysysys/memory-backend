@@ -150,38 +150,40 @@ public class OSSServiceImpl implements OSSService {
         Map<String, Integer> map = new HashMap<>();
         OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
         //暂存路径
-        String fileName = downloadRequests.get(0).getAccount() + downloadRequests.get(0).getMemoryType().getKey() + System.currentTimeMillis() + ".zip";
-        String realPath = path + fileName;
-        log.info("路径{}", realPath);
-        File file = new File(realPath);
-        //创建压缩流
-        try {
-            ZipOutputStream out = new ZipOutputStream(new FileOutputStream(file));
-            if (downloadRequests != null) {
-                downloadRequests.stream().forEach(n -> {
-                    String name = CommonUtil.getName(n.getAccount(), n.getMemoryType().getPath(), n.getObjectName());
-                    OSSObject ossObject = ossClient.getObject(bucket, name);
-                    try {
-                        InputStream inputStream = ossObject.getObjectContent();
-                        out.putNextEntry(new ZipEntry(getName(n.getObjectName(), map)));
-                        int len = 0;
-                        byte[] bytes = new byte[1024];
-                        while ((len = inputStream.read(bytes)) > 0) {
-                            out.write(bytes, 0, len);
+        if(downloadRequests != null && downloadRequests.size() >0){
+            String fileName = downloadRequests.get(0).getAccount() + downloadRequests.get(0).getMemoryType().getKey() + System.currentTimeMillis() + ".zip";
+            String realPath = path + fileName;
+            log.info("路径{}", realPath);
+            File file = new File(realPath);
+            //创建压缩流
+            try {
+                ZipOutputStream out = new ZipOutputStream(new FileOutputStream(file));
+                if (downloadRequests != null) {
+                    downloadRequests.stream().forEach(n -> {
+                        String name = CommonUtil.getName(n.getAccount(), n.getMemoryType().getPath(), n.getObjectName());
+                        OSSObject ossObject = ossClient.getObject(bucket, name);
+                        try {
+                            InputStream inputStream = ossObject.getObjectContent();
+                            out.putNextEntry(new ZipEntry(getName(n.getObjectName(), map)));
+                            int len = 0;
+                            byte[] bytes = new byte[1024];
+                            while ((len = inputStream.read(bytes)) > 0) {
+                                out.write(bytes, 0, len);
+                            }
+                            out.closeEntry();
+                            inputStream.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                        out.closeEntry();
-                        inputStream.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
+                    });
+                }
+                out.flush();
+                out.close();
+            } catch (IOException e) {
+                log.error("下载到服务器失败{}", e);
             }
-            out.flush();
-            out.close();
-        } catch (IOException e) {
-            log.error("下载到服务器失败{}", e);
+            this.out(response, realPath, fileName);
         }
-        this.out(response, realPath, fileName);
     }
 
     /**
@@ -205,30 +207,26 @@ public class OSSServiceImpl implements OSSService {
     }
 
     private void out(HttpServletResponse response, String realpath, String name) {
-
-        try {
-            response.reset();
-            response.setHeader("content-disposition", "attachment;filename=" + URLEncoder.encode(name, "UTF-8"));
-            response.setContentType("application/octet-stream");
-            File file = new File(realpath);
-            response.addHeader("Content-Length", "" + file.length());
-            if (file.exists()) {
-                try (
-                     BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(realpath));
-                     BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(response.getOutputStream());) {
-                    int len = 0;
-                    byte[] bytes = new byte[1024];
-                    while ((len = bufferedInputStream.read(bytes)) != -1) {
-                        bufferedOutputStream.write(bytes, 0, len);
-                    }
-                } catch (IOException e){
-
+        File file = new File(realpath);
+        if (file.exists()) {
+            try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(realpath));
+                    BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(response.getOutputStream())) {
+                //response.reset();
+                response.setHeader("content-disposition", "attachment;filename=" + URLEncoder.encode(name, "UTF-8"));
+                response.setContentType("application/octet-stream;charset=utf-8");
+                //因为压缩文件可能比较大 所以要用指定数组大小的方式 一点点输出
+                int len = 0;
+                byte[] bytes = new byte[1024];
+                while ((len = bufferedInputStream.read(bytes)) != -1) {
+                    bufferedOutputStream.write(bytes, 0, len);
                 }
-            } else {
-                log.error("文件不存在");
+                bufferedOutputStream.flush();
+            } catch (Exception e) {
+                log.error("下载文件出错{}", e);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+            //file.delete();
+        } else {
+            log.error("文件不存在");
         }
 
     }
