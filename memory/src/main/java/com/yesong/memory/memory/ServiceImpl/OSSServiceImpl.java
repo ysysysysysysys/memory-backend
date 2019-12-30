@@ -1,13 +1,15 @@
 package com.yesong.memory.memory.ServiceImpl;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.aliyun.oss.OSS;
+import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.common.utils.BinaryUtil;
+import com.aliyun.oss.common.utils.DateUtil;
 import com.aliyun.oss.internal.OSSUtils;
-import com.aliyun.oss.model.OSSObject;
-import com.aliyun.oss.model.PutObjectRequest;
-import com.aliyun.oss.model.PutObjectResult;
+import com.aliyun.oss.model.*;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -31,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,6 +44,7 @@ import java.io.*;
 import java.net.URLEncoder;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -63,6 +67,8 @@ public class OSSServiceImpl implements OSSService {
     private OSSUtil ossUtil;
     @Autowired
     private UploadMapper uploadMapper;
+    @Autowired
+    private RedisTemplate redisTemplate;
 
     @Override
     public CommonResponse upLoad(List<MultipartFile> file, MemoryType memoryType, String account) {
@@ -70,6 +76,8 @@ public class OSSServiceImpl implements OSSService {
         OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
         //返回值
         List<UploadInfoResponse> uploadInfoResponses = new ArrayList<>();
+        //去重
+        file = checkRepeat(file, account, memoryType.getKey());
         //上传
         if (file != null) {
             uploadInfoResponses = file.parallelStream().map(multipartFile -> {
@@ -103,6 +111,7 @@ public class OSSServiceImpl implements OSSService {
                     log.error("上传文件{}出错{}", multipartFile.getOriginalFilename(), e);
                     return null;
                 }
+
             }).collect(Collectors.toList());
 
         }
@@ -150,7 +159,7 @@ public class OSSServiceImpl implements OSSService {
         Map<String, Integer> map = new HashMap<>();
         OSS ossClient = new OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret);
         //暂存路径
-        if(downloadRequests != null && downloadRequests.size() >0){
+        if (downloadRequests != null && downloadRequests.size() > 0) {
             String fileName = downloadRequests.get(0).getAccount() + downloadRequests.get(0).getMemoryType().getKey() + System.currentTimeMillis() + ".zip";
             String realPath = path + fileName;
             log.info("路径{}", realPath);
@@ -210,7 +219,7 @@ public class OSSServiceImpl implements OSSService {
         File file = new File(realpath);
         if (file.exists()) {
             try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(realpath));
-                    BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(response.getOutputStream())) {
+                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(response.getOutputStream())) {
                 //response.reset();
                 response.setHeader("content-disposition", "attachment;filename=" + URLEncoder.encode(name, "UTF-8"));
                 response.setContentType("application/octet-stream;charset=utf-8");
@@ -228,6 +237,55 @@ public class OSSServiceImpl implements OSSService {
         } else {
             log.error("文件不存在");
         }
+    }
 
+    private List<MultipartFile>  checkRepeat(List<MultipartFile> file, String account, String type) {
+        List<MultipartFile> multipartFiles = new ArrayList<>();
+        for (MultipartFile multipartFile : file) {
+            String  name = multipartFile.getOriginalFilename();
+            Object o = redisTemplate.opsForHash().get(account, type);
+            if (o != null) {
+                boolean state = false;
+                List<String> names = JSONArray.parseArray(o.toString(), String.class);
+                if (names != null) {
+                    for (String s : names) {
+                        if (name.equals(s)) {
+                            state = true;
+                        }
+                    }
+                    if(!state){
+                        names.add(multipartFile.getOriginalFilename());
+                        multipartFiles.add(multipartFile);
+                    }
+                }
+                redisTemplate.opsForHash().put(account, type, JSONArray.toJSONString(names));
+                redisTemplate.expire(account, 30, TimeUnit.DAYS);
+            } else {
+                //如果缓存不存在 查数据库
+                List<UploadInfo> uploadInfos = uploadMapper.selectList(new QueryWrapper<UploadInfo>().lambda()
+                        .eq(UploadInfo::getAccount, account)
+                        .eq(UploadInfo::getDeleted, false)
+                        .eq(UploadInfo::getType, type));
+                List<String> names = new ArrayList<>();
+                if (uploadInfos != null && uploadInfos.size() > 0) {
+                    boolean state = false;
+                    for (UploadInfo uploadInfo : uploadInfos) {
+                        if (uploadInfo.getOriginalFilename().equals(name)) {
+                            state = true;
+                        }
+                        names.add(uploadInfo.getOriginalFilename());
+                    }
+                    if(!state){
+                        multipartFiles.add(multipartFile);
+                    }
+                } else {
+                    names.add(name);
+                    multipartFiles.add(multipartFile);
+                }
+                redisTemplate.opsForHash().put(account, type, JSONArray.toJSONString(names));
+                redisTemplate.expire(account, 30, TimeUnit.DAYS);
+            }
+        }
+        return multipartFiles;
     }
 }

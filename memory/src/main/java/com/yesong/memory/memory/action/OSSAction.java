@@ -47,19 +47,4 @@ public class OSSAction {
     public void download(@RequestBody List<DownloadRequest> downloadRequests, HttpServletRequest request, HttpServletResponse response) throws IOException {
         ossService.download(downloadRequests,request,response);
     }
-
-    @RequestMapping(value = "/test", method = {RequestMethod.POST})
-    @ApiOperation(value = "test")
-    public void test(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        response.setHeader("content-disposition", "attachment;filename=" + URLEncoder.encode("test.jpg", "UTF-8"));
-        response.setContentType("application/octet-stream;charset=utf-8");
-        File file = new File("/Users/yesong/Pictures/2019/图片/7C7DEE87-18C0-4FB7-9B08-90EED72F143B-5284-000006BF316C0323.jpg");
-        try(BufferedInputStream b = new BufferedInputStream(new FileInputStream(file));
-            BufferedOutputStream out = new BufferedOutputStream(response.getOutputStream())){
-            byte[] bytes = new byte[b.available()];
-            b.read(bytes);
-            out.write(bytes);
-            out.flush();
-        }
-    }
 }
