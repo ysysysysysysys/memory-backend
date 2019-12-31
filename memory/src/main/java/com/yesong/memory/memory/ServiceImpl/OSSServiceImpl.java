@@ -1,20 +1,12 @@
 package com.yesong.memory.memory.ServiceImpl;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClient;
 import com.aliyun.oss.OSSClientBuilder;
-import com.aliyun.oss.common.utils.BinaryUtil;
-import com.aliyun.oss.common.utils.DateUtil;
-import com.aliyun.oss.internal.OSSUtils;
 import com.aliyun.oss.model.*;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
-import com.yesong.memory.memory.config.PutObjectProgressListener;
 import com.yesong.memory.memory.entity.UploadInfo;
 import com.yesong.memory.memory.enums.MemoryType;
 import com.yesong.memory.memory.mapper.UploadMapper;
@@ -25,9 +17,7 @@ import com.yesong.memory.memory.response.UploadInfoResponse;
 import com.yesong.memory.memory.service.OSSService;
 import com.yesong.memory.memory.util.CommonUtil;
 import com.yesong.memory.memory.util.OSSUtil;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.tools.zip.ZipEntry;
-import org.apache.tools.zip.ZipFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -37,16 +27,13 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.net.URLEncoder;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 @Service

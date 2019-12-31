@@ -43,11 +43,11 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
     public CommonResponse regist(UserRequest userRequest) {
         String registCode = userRequest.getRegistCode();
         Object o = redisTemplate.opsForValue().get(registCode);
-        if(o == null){
+        log.info("邀请码{}",JSONObject.toJSONString(o));
+        if(o == null || !registCode.equals((String)o)){
             return CommonResponse.builder().success(false).message("注册码有误").build();
         }else{
             User user = new User().getCreateEntity();
