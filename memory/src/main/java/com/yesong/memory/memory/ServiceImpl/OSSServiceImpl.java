@@ -64,7 +64,9 @@ public class OSSServiceImpl implements OSSService {
         //返回值
         List<UploadInfoResponse> uploadInfoResponses = new ArrayList<>();
         //去重
+        log.info("用户{}上传{}",account,memoryType.getKey());
         file = checkRepeat(file, account, memoryType.getKey());
+        log.info("去重后{}",JSONObject.toJSONString(file));
         //上传
         if (file != null) {
             uploadInfoResponses = file.parallelStream().map(multipartFile -> {
