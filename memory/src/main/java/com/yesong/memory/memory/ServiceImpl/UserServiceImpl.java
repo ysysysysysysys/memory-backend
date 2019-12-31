@@ -45,11 +45,18 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public CommonResponse regist(UserRequest userRequest) {
-        User user = new User().getCreateEntity();
-        BeanUtils.copyProperties(userRequest,user);
-        user.setPassword(DigestUtils.md5Hex(user.getPassword()));
-        userMapper.insert(user);
-        return CommonResponse.builder().success(true).build();
+        String registCode = userRequest.getRegistCode();
+        Object o = redisTemplate.opsForValue().get(registCode);
+        if(o == null){
+            return CommonResponse.builder().success(false).message("注册码有误").build();
+        }else{
+            User user = new User().getCreateEntity();
+            BeanUtils.copyProperties(userRequest,user);
+            user.setPassword(DigestUtils.md5Hex(user.getPassword()));
+            userMapper.insert(user);
+            redisTemplate.delete(registCode);
+            return CommonResponse.builder().success(true).build();
+        }
     }
 
     @Override
